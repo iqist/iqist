@@ -452,12 +452,18 @@
      integer  :: i
 
 ! scaled histogram data
+     real(dp) :: hint(mkink)
      real(dp) :: haux(mkink)
      real(dp) :: htmp(mkink)
 
-! evaluate haux and htmp at first
+! evaluate hint, haux, and htmp at first, and then transform them
+     hint = hist
      haux = hist / sum(hist)
      htmp = herr / sum(hist)
+
+     hint = cshift(hint, -1)
+     haux = cshift(haux, -1)
+     htmp = cshift(htmp, -1)
 
 ! open data file: solver.hist.dat
      open(mytmp, file='solver.hist.dat', form='formatted', status='unknown')
@@ -465,7 +471,7 @@
 ! write it
      write(mytmp,'(a)') '# histogram: order | count | percent'
      do i=1,mkink
-         write(mytmp,'(i6,i12,2f12.6)') i, int( hist(i) ), haux(i), htmp(i)
+         write(mytmp,'(i6,i12,2f12.6)') i-1, int( hint(i) ), haux(i), htmp(i)
      enddo ! over i={1,mkink} loop
 
 ! close data file
@@ -788,18 +794,14 @@
 
      write(mytmp,'(a,i6)') '# flvr:', 8888
      do i=1,ntime
-         write(mytmp,'(3f12.6)') tmesh(i), &
-                                 schi(i) / real(nband), &
-                                 serr(i) / real(nband)
+         write(mytmp,'(3f12.6)') tmesh(i), schi(i), serr(i)
      enddo ! over i={1,ntime} loop
      write(mytmp,*) ! write empty lines
      write(mytmp,*)
 
      write(mytmp,'(a,i6)') '# flvr:', 9999
      do i=1,ntime
-         write(mytmp,'(3f12.6)') tmesh(i), &
-                                 sum( sschi(i,:) ) / real(nband), &
-                                 sum( sserr(i,:) ) / real(nband)
+         write(mytmp,'(3f12.6)') tmesh(i), sum( sschi(i,:) ), sum( sserr(i,:) )
      enddo ! over i={1,ntime} loop
      write(mytmp,*) ! write empty lines
      write(mytmp,*)
@@ -909,18 +911,14 @@
 
      write(mytmp,'(a,i6)') '# flvr:', 8888
      do i=1,ntime
-         write(mytmp,'(3f12.6)') tmesh(i), &
-                                 ochi(i) / real(norbs), &
-                                 oerr(i) / real(norbs)
+         write(mytmp,'(3f12.6)') tmesh(i), ochi(i), oerr(i)
      enddo ! over i={1,ntime} loop
      write(mytmp,*) ! write empty lines
      write(mytmp,*)
 
      write(mytmp,'(a,i6)') '# flvr:', 9999
      do i=1,ntime
-         write(mytmp,'(3f12.6)') tmesh(i), &
-                                 sum( oochi(i,:,:) ) / real(norbs * norbs), &
-                                 sum( ooerr(i,:,:) ) / real(norbs * norbs)
+         write(mytmp,'(3f12.6)') tmesh(i), sum( oochi(i,:,:) ), sum( ooerr(i,:,:) )
      enddo ! over i={1,ntime} loop
      write(mytmp,*) ! write empty lines
      write(mytmp,*)

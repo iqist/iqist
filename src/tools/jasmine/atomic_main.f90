@@ -6,7 +6,7 @@
 !!! time quantum Monte Carlo (CTQMC) quantum impurity solver             !
 !!! author  : Yilin Wang (at IOP/CAS)                                    !
 !!!           Li Huang (at IOP/CAS & SPCLab/CAEP & UNIFR)                !
-!!! version : v2015.01.06T                                               !
+!!! version : v2016.02.13T                                               !
 !!! status  : WARNING: IN TESTING STAGE, USE IT IN YOUR RISK             !
 !!! comment : the atomic solver is based on Dr. Liang Du's rambutan code !
 !!!           any question, please contact with lihuang.dmft@gmail.com   !
@@ -17,7 +17,7 @@
 !! WARNING
 !! =======
 !!
-!! If you want to obtain an executable program, please go to src/build/,
+!! If you want to obtain an executable program, please go to iqist/build/,
 !! type 'make jasmine' command in the terminal. On the contrary, if you
 !! want to compile jasmine as a library, please use 'make jasmine-lib'.
 !! If you want to obtain a python module, please use 'make jasmine-pylib'.
@@ -37,7 +37,7 @@
 !! Usage
 !! =====
 !!
-!! # ./atomic or bin/jasmine.x
+!! # ./atomic or build/jasmine.x
 !!
 !! Input
 !! =====
@@ -63,7 +63,7 @@
 !! Documents
 !! =========
 !!
-!! For more details, please go to iqist/doc/manual directory.
+!! For more details, please see the on line reference manual.
 !!
 !!
 
