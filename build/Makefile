@@ -30,20 +30,15 @@
 ##
 ## 'make tool'
 ##
-## 5. build documents
-## ------------------
-##
-## 'make other'
-##
-## 6. build specified code
+## 5. build specified code
 ## -----------------------
 ##
 ## 'make xxx'
 ##
-## here xxx is the code name, please input 'make help-more' to obtain more
+## here xxx is the code name, please type 'make help-more' to obtain more
 ## information about the possible values of xxx
 ##
-## 7. clean the directories
+## 6. clean the directories
 ## ------------------------
 ##
 ## 'make clean'
@@ -59,7 +54,7 @@
 ## =======
 ##
 ## 02/28/2015 by li huang (created)
-## 08/17/2015 by li huang (last modified)
+## 02/13/2016 by li huang (last modified)
 ##
 ##
 
@@ -83,10 +78,6 @@ help:
 	@echo '     tool              build auxiliary tool components                '
 	@echo '     tool-lib          build auxiliary tool components as libs        '
 	@echo '     clean-tool        clean objects for auxiliary tools              '
-	@echo
-	@echo '     other             build documents                                '
-	@echo '     other-lib         build documents                                '
-	@echo '     clean-other       clean doc directories                          '
 
 help-more:
 	@echo '  Interacting Quantum Impurity Solver Toolkit Building System'
@@ -148,6 +139,7 @@ help-more:
 	@echo
 	@echo '     hibiscus          build hibiscus code                  '
 	@echo '     hibiscus-lib      build hibiscus code                  '
+	@echo '     hibiscus-pylib    build hibiscus code                  '
 	@echo '     clean-hibiscus    clean hibiscus directory             '
 	@echo
 	@echo '     capi              build capi library                   '
@@ -157,19 +149,15 @@ help-more:
 	@echo '     base              build base library                   '
 	@echo '     base-lib          build base library                   '
 	@echo '     clean-base        clean base directory                 '
-	@echo
-	@echo '     doc               generate documents                   '
-	@echo '     doc-lib           generate documents                   '
-	@echo '     clean-doc         clean doc directory                  '
 
 # all-in-one building target
-all: base capi solver tool other
+all: base capi solver tool
 
 # all-in-one building target (lib mode)
-lib: base-lib capi-lib solver-lib tool-lib other-lib
+lib: base-lib capi-lib solver-lib tool-lib
 
 # all-in-one cleaning target
-clean: clean-base clean-capi clean-solver clean-tool clean-other
+clean: clean-base clean-capi clean-solver clean-tool
 
 # targets for solver
 solver: base capi \
@@ -195,11 +183,6 @@ clean-solver: clean-base clean-capi \
 tool: base capi jasmine hibiscus
 tool-lib: base-lib capi-lib jasmine-lib hibiscus-lib
 clean-tool: clean-base clean-capi clean-jasmine clean-hibiscus
-
-# targets for other
-other: doc
-other-lib: doc-lib
-clean-other: clean-doc
 
 # targets for ctqmc codes: segment version (azalea, gardenia, narcissus)
 azalea:
@@ -334,6 +317,9 @@ hibiscus:
 hibiscus-lib:
 	cd ../src/tools/hibiscus/; pwd; make
 
+hibiscus-pylib:
+	cd ../src/tools/hibiscus/; pwd; make
+
 clean-hibiscus:
 	cd ../src/tools/hibiscus/; pwd; make clean
 
@@ -356,13 +342,3 @@ base-lib:
 
 clean-base:
 	cd ../src/base/; pwd; make clean
-
-# targets for doc: doc
-doc:
-	cd ../doc/manual/; pwd; make full
-
-doc-lib:
-	cd ../doc/manual/; pwd; make full
-
-clean-doc:
-	cd ../doc/manual/; pwd; make clean

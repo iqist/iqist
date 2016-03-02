@@ -7,7 +7,7 @@
 !!! Carlo (CT-QMC) or Hirsch-Fye quantum Monte Carlo (HF-QMC) quantum    !
 !!! impurity solver                                                      !
 !!! author  : Li Huang (at IOP/CAS & SPCLab/CAEP & UNIFR)                !
-!!! version : v2015.01.06T                                               !
+!!! version : v2016.02.13T                                               !
 !!! status  : WARNING: IN TESTING STAGE, USE IT IN YOUR RISK             !
 !!! comment : the code is originally written by                          !
 !!!           Anders W. Sandvik                                          !
@@ -34,7 +34,7 @@
 !! Usage
 !! =====
 !!
-!! # ./entropy or bin/entropy.x
+!! # ./entropy or build/entropy.x
 !!
 !! Input
 !! =====
@@ -51,7 +51,7 @@
 !! Documents
 !! =========
 !!
-!! For more details, please go to iqist/doc/manual directory.
+!! For more details, please see the on line reference manual.
 !!
 !!
 
@@ -111,7 +111,8 @@
 ! prepare necessary data for classic maximum entropy method code
      call entropy_make_init2(tmesh, wmesh, model, fnorm, fkern)
 
-     ENTROPY_BAND_LOOP: do i=1,norbs
+     ENTROPY_BAND_LOOP: &
+     do i=1,norbs
 
 ! write out helpful information
          if ( myid == master ) then ! only master node can do it

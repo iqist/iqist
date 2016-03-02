@@ -7,7 +7,7 @@
 !!! quantum Monte Carlo (CT-QMC) or Hirsch-Fye quantum Monte Carlo       !
 !!! (HF-QMC) quantum impurity solver                                     !
 !!! author  : Li Huang (at IOP/CAS & SPCLab/CAEP & UNIFR)                !
-!!! version : v2015.01.06T                                               !
+!!! version : v2016.02.13T                                               !
 !!! status  : WARNING: IN TESTING STAGE, USE IT IN YOUR RISK             !
 !!! comment : this code is based originally on Dr. Q. S. Wu's code       !
 !!!           any question, please contact with lihuang.dmft@gmail.com   !
@@ -32,7 +32,7 @@
 !! Usage
 !! =====
 !!
-!! # ./sac or bin/sac.x
+!! # ./sac or build/sac.x
 !!
 !! Input
 !! =====
@@ -51,7 +51,7 @@
 !! Documents
 !! =========
 !!
-!! For more details, please go to iqist/doc/manual directory.
+!! For more details, please see the on line reference manual.
 !!
 !!
 
