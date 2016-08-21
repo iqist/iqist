@@ -5,7 +5,15 @@
 * Remove ROADMAP.md.
 * Remove iqist/doc directory.
 * The building system is updated, remove support for doc target.
+* The official reference manual is released at Gitbook.
 * Fix the file format of solver.hist.dat.
+* Add script/u_animator.py which can produce movie using the solver.diag.dat file.
+* Now the CT-QMC impurity solvers can output the solver.diag.dat file.
+* Now the HF-QMC impurity solver can output the solver.diag.dat file.
+* Optimize the algorithm for the calculation of spin-spin correlation function (time space)
+* Optimize the algorithm for the calculation of orbital-orbital correlation function (time space)
+* Implement the measurement of spin-spin correlation function (matsubara space)
+* Implement the measurement of orbital-orbital correlation function (matsubara space)
 * Improve the code styles, fix many typos in comments.
 
 ## v0.6.6 @ 9e0bf1b // Dec 16, 2015

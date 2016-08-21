@@ -8,6 +8,7 @@
 !!!           ctqmc_record_nmat
 !!!           ctqmc_record_kmat
 !!!           ctqmc_record_lmat
+!!!           ctqmc_record_szpw
 !!!           ctqmc_record_schi
 !!!           ctqmc_record_sfom
 !!!           ctqmc_record_ochi
@@ -23,6 +24,7 @@
 !!!           ctqmc_reduce_nmat
 !!!           ctqmc_reduce_kmat
 !!!           ctqmc_reduce_lmat
+!!!           ctqmc_reduce_szpw
 !!!           ctqmc_reduce_schi
 !!!           ctqmc_reduce_sfom
 !!!           ctqmc_reduce_ochi
@@ -853,7 +855,92 @@
      return
   end subroutine ctqmc_record_lmat
 
+!!>>> ctqmc_record_szpw: record the powers of local magnetization
+  subroutine ctqmc_record_szpw()
+     use constants, only : dp, zero
+
+     use control, only : issus
+     use control, only : nband, norbs
+     use control, only : ntime
+     use control, only : beta
+     use context, only : tmesh
+     use context, only : szpow
+
+     implicit none
+
+! local variables
+! loop index over times
+     integer  :: i
+
+! loop index for flavor channel
+     integer  :: f1
+     integer  :: f2
+
+! \delta \tau
+     real(dp) :: step
+
+! integral of Sz(\tau), in order words:
+!     sint = 1/\beta \int^{\beta}_0 Sz(\tau) d\tau
+     real(dp) :: sint
+
+! used to record occupations for current flavor channel and time
+     real(dp) :: oaux(ntime,norbs)
+
+! orbital-resolved Sz(\tau)
+     real(dp) :: saux(ntime,nband)
+
+! check whether there is conflict
+     call s_assert( btest(issus, 7) )
+
+! calculate oaux, obtain occupation status
+! calculate saux, obtain Sz(\tau)
+     oaux = zero
+     saux = zero
+     TIME_LOOP: do i=1,ntime
+         do f1=1,norbs
+             call ctqmc_spin_counter(f1, tmesh(i), oaux(i,f1))
+         enddo ! over f1={1,norbs} loop
+
+         do f2=1,nband
+             saux(i,f2) = oaux(i,f2) - oaux(i,f2+nband)
+         enddo ! over f2={1,nband} loop
+     enddo TIME_LOOP ! over i={1,ntime} loop
+
+! accumulate szpow(1:4,1:nband)
+! calculate \delta \tau
+     step = ( tmesh(2) - tmesh(1) ) / 2.0
+     BAND_LOOP: do f2=1,nband
+! calculate sint using trapezoid algorithm 
+         sint = zero
+         do i=1,ntime-1
+             sint = sint + ( saux(i,f2) + saux(i+1,f2) ) * step
+         enddo ! over i={1,ntime-1} loop
+         sint = sint / beta
+! record the data
+         szpow(1,f2) = szpow(1,f2) + sint**1.0
+         szpow(2,f2) = szpow(2,f2) + sint**2.0
+         szpow(3,f2) = szpow(3,f2) + sint**3.0
+         szpow(4,f2) = szpow(4,f2) + sint**4.0
+     enddo BAND_LOOP ! over f2={1,nband} loop
+
+! accumulate szpow(1:4,nband+1)
+! here we consider the contribution from all flavors
+     sint = zero
+     do i=1,ntime-1
+         sint = sint + ( sum( saux(i,:) ) + sum( saux(i+1,:) ) ) * step
+     enddo ! over i={1,ntime-1} loop
+     sint = sint / beta
+! record the data
+     szpow(1,nband+1) = szpow(1,nband+1) + sint**1.0
+     szpow(2,nband+1) = szpow(2,nband+1) + sint**2.0
+     szpow(3,nband+1) = szpow(3,nband+1) + sint**3.0
+     szpow(4,nband+1) = szpow(4,nband+1) + sint**4.0
+
+     return
+  end subroutine ctqmc_record_szpw
+
 !!>>> ctqmc_record_schi: record the spin-spin correlation function
+!!>>> imaginary-time version
   subroutine ctqmc_record_schi()
      use constants, only : dp, zero
      use spring, only : spring_sfmt_stream
@@ -868,6 +955,7 @@
 
 ! local parameters
 ! number of internal loop
+! if you want to obtain more accurate results, please increase it
      integer, parameter :: num_try = 16
 
 ! local variables
@@ -937,11 +1025,121 @@
      return
   end subroutine ctqmc_record_schi
 
+!!>>> ctqmc_record_sfom: record the spin-spin correlation function
+!!>>> matsubara frequency version
   subroutine ctqmc_record_sfom()
-     call s_print_error('ctqmc_record_sfom','in debug mode')
+     use constants, only : dp, zero, one, two, pi, czi
+
+     use control, only : issus
+     use control, only : nband, norbs
+     use control, only : nbfrq
+     use control, only : beta
+     use context, only : index_s, index_e, time_s, time_e
+     use context, only : ssfom
+     use context, only : rank
+
+     implicit none
+
+! local variables
+! loop index for flavor channel
+     integer  :: f1
+     integer  :: f2
+
+! loop index for operators
+     integer  :: it
+
+! imaginary time for start and end points
+     real(dp) :: taus
+     real(dp) :: taue
+
+! the first bosonic frequency
+     complex(dp) :: dw
+
+! used to record occupations for current flavor channel at \tau = 0
+     real(dp) :: oaux(norbs)
+
+! bosonic frequency mesh
+     complex(dp) :: mesh(nbfrq)
+
+! matsubara frequency exponents for create operators
+     complex(dp) :: exps(nbfrq)
+
+! matsubara frequency exponents for destroy operators
+     complex(dp) :: expe(nbfrq)
+
+! check whether there is conflict
+     call s_assert( btest(issus, 3) )
+
+! build bosonic frequency mesh
+     dw = czi * two * pi / beta
+     mesh = dw
+     call s_cumsum_z(nbfrq, mesh, mesh)
+
+! calculate oaux, obtain occupation status
+     do f1=1,norbs
+         call ctqmc_spin_counter(f1, zero, oaux(f1))
+     enddo ! over i={1,norbs} loop
+
+! calculate ssfom, it must be real
+! < Sz(t)Sz(0) > = < ( nu(t) - nd(t) ) * ( nu(0) - nd(0) ) >
+     do f1=1,nband
+         f2 = f1 + nband
+! the contribution from oaux(f1) = one and oaux(f2) = one is zero
+! the contribution from oaux(f1) = zero and oaux(f2) = zero is also zero
+! here oaux(f1) = one; oaux(f2) = zero
+         if ( oaux(f1) > zero .and. oaux(f2) < one ) then
+! + nu(t)nu(0) term
+             do it=1,rank(f1)
+                 taus = time_s( index_s(it, f1), f1 )
+                 taue = time_e( index_e(it, f1), f1 )
+                 exps = exp( dw * taus )
+                 expe = exp( dw * taue )
+                 call s_cumprod_z(nbfrq, exps, exps)
+                 call s_cumprod_z(nbfrq, expe, expe)
+                 ssfom(:,f1) = ssfom(:,f1) + real( ( expe - exps ) / mesh )
+             enddo ! over do it={1,rank(f1)} loop
+! - nd(t)nu(0) term
+             do it=1,rank(f2)
+                 taus = time_s( index_s(it, f2), f2 )
+                 taue = time_e( index_e(it, f2), f2 )
+                 exps = exp( dw * taus )
+                 expe = exp( dw * taue )
+                 call s_cumprod_z(nbfrq, exps, exps)
+                 call s_cumprod_z(nbfrq, expe, expe)
+                 ssfom(:,f1) = ssfom(:,f1) - real( ( expe - exps ) / mesh )
+             enddo ! over do it={1,rank(f2)} loop
+         endif ! back if ( oaux(f1) > zero .and. oaux(f2) < one ) block
+
+! here oaux(f2) = one; oaux(f1) = zero
+         if ( oaux(f2) > zero .and. oaux(f1) < one ) then
+! - nu(t)nd(0) term
+             do it=1,rank(f1)
+                 taus = time_s( index_s(it, f1), f1 )
+                 taue = time_e( index_e(it, f1), f1 )
+                 exps = exp( dw * taus )
+                 expe = exp( dw * taue )
+                 call s_cumprod_z(nbfrq, exps, exps)
+                 call s_cumprod_z(nbfrq, expe, expe)
+                 ssfom(:,f1) = ssfom(:,f1) - real( ( expe - exps ) / mesh )
+             enddo ! over do it={1,rank(f1)} loop
+! + nd(t)nd(0) term
+             do it=1,rank(f2)
+                 taus = time_s( index_s(it, f2), f2 )
+                 taue = time_e( index_e(it, f2), f2 )
+                 exps = exp( dw * taus )
+                 expe = exp( dw * taue )
+                 call s_cumprod_z(nbfrq, exps, exps)
+                 call s_cumprod_z(nbfrq, expe, expe)
+                 ssfom(:,f1) = ssfom(:,f1) + real( ( expe - exps ) / mesh )
+             enddo ! over do it={1,rank(f2)} loop
+         endif ! back if ( oaux(f2) > zero .and. oaux(f1) < one ) block
+     enddo ! over f1={1,nband} loop
+
+     return
   end subroutine ctqmc_record_sfom
 
 !!>>> ctqmc_record_ochi: record the orbital-orbital correlation function
+!!>>> imaginary-time version
   subroutine ctqmc_record_ochi()
      use constants, only : dp, zero
      use spring, only : spring_sfmt_stream
@@ -956,6 +1154,7 @@
 
 ! local parameters
 ! number of internal loop
+! if you want to obtain more accurate results, please increase it
      integer, parameter :: num_try = 16
 
 ! local variables
@@ -1007,8 +1206,82 @@
      return
   end subroutine ctqmc_record_ochi
 
+!!>>> ctqmc_record_ofom: record the orbital-orbital correlation function
+!!>>> matsubara frequency version
   subroutine ctqmc_record_ofom()
-     call s_print_error('ctqmc_record_ofom','in debug mode')
+     use constants, only : dp, zero, two, pi, czi
+
+     use control, only : issus
+     use control, only : norbs
+     use control, only : nbfrq
+     use control, only : beta
+     use context, only : index_s, index_e, time_s, time_e
+     use context, only : oofom
+     use context, only : rank
+
+     implicit none
+
+! local variables
+! loop index for flavor channel
+     integer  :: f1
+     integer  :: f2
+
+! loop index for operators
+     integer  :: it
+
+! imaginary time for start and end points
+     real(dp) :: taus
+     real(dp) :: taue
+
+! the first bosonic frequency
+     complex(dp) :: dw
+
+! used to record occupations for current flavor channel at \tau = 0
+     real(dp) :: oaux(norbs)
+
+! bosonic frequency mesh
+     complex(dp) :: mesh(nbfrq)
+
+! matsubara frequency exponents for create operators
+     complex(dp) :: exps(nbfrq)
+
+! matsubara frequency exponents for destroy operators
+     complex(dp) :: expe(nbfrq)
+
+! check whether there is conflict
+     call s_assert( btest(issus, 4) )
+
+! build bosonic frequency mesh
+     dw = czi * two * pi / beta
+     mesh = dw
+     call s_cumsum_z(nbfrq, mesh, mesh)
+
+! calculate oaux, obtain occupation status
+     do f1=1,norbs
+         call ctqmc_spin_counter(f1, zero, oaux(f1))
+     enddo ! over i={1,norbs} loop
+
+! calculate oofom, it must be real
+     do f1=1,norbs
+         do f2=1,f1
+             if ( oaux(f2) > zero ) then
+                 do it=1,rank(f1)
+                     taus = time_s( index_s(it, f1), f1 )
+                     taue = time_e( index_e(it, f1), f1 )
+                     exps = exp( dw * taus )
+                     expe = exp( dw * taue )
+                     call s_cumprod_z(nbfrq, exps, exps)
+                     call s_cumprod_z(nbfrq, expe, expe)
+                     oofom(:,f2,f1) = oofom(:,f2,f1) + real( ( expe - exps ) / mesh )
+                 enddo ! over do it={1,rank(f1)} loop
+             endif ! back if ( oaux(f2) > zero ) block
+             if ( f1 /= f2 ) then ! consider the symmetry
+                 oofom(:,f1,f2) = oofom(:,f2,f1)
+             endif ! back if ( f1 /= f2 ) block
+         enddo ! over f2={1,f1} loop
+     enddo ! over f1={1,norbs} loop
+
+     return
   end subroutine ctqmc_record_ofom
 
 !!>>> ctqmc_record_twop: record the two-particle green's function
@@ -1901,6 +2174,63 @@
 
      return
   end subroutine ctqmc_reduce_lmat
+
+!!>>> ctqmc_reduce_szpw: reduce the szpow from all children processes
+  subroutine ctqmc_reduce_szpw(szpow_mpi, szpow_err)
+     use constants, only : dp, zero
+     use mmpi, only : mp_allreduce, mp_barrier
+
+     use control, only : norbs
+     use control, only : nprocs
+     use context, only : szpow
+
+     implicit none
+
+! external arguments
+! powers of local magnetization, orbital-resolved
+     real(dp), intent(out) :: szpow_mpi(4,norbs)
+     real(dp), intent(out) :: szpow_err(4,norbs)
+
+! initialize szpow_mpi and szpow_err
+     szpow_mpi = zero
+     szpow_err = zero
+
+! build szpow_mpi, collect data from all children processes
+# if defined (MPI)
+
+! collect data
+     call mp_allreduce(szpow, szpow_mpi)
+
+! block until all processes have reached here
+     call mp_barrier()
+
+# else  /* MPI */
+
+     szpow_mpi = szpow
+
+# endif /* MPI */
+
+! calculate the average
+     szpow_mpi = szpow_mpi / real(nprocs)
+
+! build szpow_err, collect data from all children processes
+# if defined (MPI)
+
+! collect data
+     call mp_allreduce((szpow - szpow_mpi)**2, szpow_err)
+
+! block until all processes have reached here
+     call mp_barrier()
+
+# endif /* MPI */
+
+! calculate standard deviation
+     if ( nprocs > 1 ) then
+         szpow_err = sqrt( szpow_err / real( nprocs * ( nprocs - 1 ) ) )
+     endif ! back if ( nprocs > 1 ) block
+
+     return
+  end subroutine ctqmc_reduce_szpw
 
 !!>>> ctqmc_reduce_schi: reduce the schi and sschi from all children processes
   subroutine ctqmc_reduce_schi(schi_mpi, sschi_mpi, schi_err, sschi_err)
