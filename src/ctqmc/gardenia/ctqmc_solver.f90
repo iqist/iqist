@@ -5,6 +5,7 @@
 !!!           ctqmc_diagram_sampling
 !!!           ctqmc_diagram_templing
 !!!           ctqmc_diagram_checking
+!!!           ctqmc_diagram_plotting
 !!!           ctqmc_impurity_tester
 !!! source  : ctqmc_solver.f90
 !!! type    : subroutines
@@ -36,6 +37,7 @@
      use context, only : nmat, nnmat
      use context, only : kmat, kkmat
      use context, only : lmat, rmat, lrmat
+     use context, only : szpow
      use context, only : schi, sschi, ssfom, ochi, oochi, oofom
      use context, only : g2_re, g2_im, h2_re, h2_im, ps_re, ps_im
      use context, only : symm
@@ -114,6 +116,10 @@
      real(dp), allocatable :: lrmat_mpi(:,:)
      real(dp), allocatable :: lrmat_err(:,:)
 
+! powers of local magnetization, for mpi case
+     real(dp), allocatable :: szpow_mpi(:,:)
+     real(dp), allocatable :: szpow_err(:,:)
+
 ! spin-spin correlation function, totally-averaged, for mpi case
      real(dp), allocatable :: schi_mpi(:)
      real(dp), allocatable :: schi_err(:)
@@ -188,6 +194,8 @@
      allocate(rmat_err(norbs),             stat=istat)
      allocate(lrmat_mpi(norbs,norbs),      stat=istat)
      allocate(lrmat_err(norbs,norbs),      stat=istat)
+     allocate(szpow_mpi(  4  ,norbs),      stat=istat)
+     allocate(szpow_err(  4  ,norbs),      stat=istat)
      allocate(schi_mpi(ntime),             stat=istat)
      allocate(schi_err(ntime),             stat=istat)
      allocate(sschi_mpi(ntime,nband),      stat=istat)
@@ -407,6 +415,11 @@
                  call ctqmc_record_lmat()
              endif ! back if ( mod(cstep, nmonte) == 0 .and. btest(issus, 6) ) block
 
+! record the powers of local magnetization
+             if ( mod(cstep, nmonte) == 0 .and. btest(issus, 7) ) then
+                 call ctqmc_record_szpw()
+             endif ! back if ( mod(cstep, nmonte) == 0 .and. btest(issus, 7) ) block
+
 ! record nothing
              if ( mod(cstep, nmonte) == 0 .and. btest(isvrt, 0) ) then
                  CONTINUE
@@ -480,7 +493,13 @@
 !!>>> checking quantum impurity solver                                 <<<
 !!========================================================================
 
+! check the status at first
          call ctqmc_diagram_checking(cflag)
+
+! write out the snapshot for the current diagram configuration
+         if ( myid == master ) then
+             call ctqmc_diagram_plotting(iter, cstep)
+         endif ! back if ( myid == master ) block
 
 !!========================================================================
 !!>>> timing quantum impurity solver                                   <<<
@@ -538,6 +557,9 @@
 ! collect the fidelity susceptibility data from lrmat to lrmat_mpi
      call ctqmc_reduce_lmat(lmat_mpi, rmat_mpi, lrmat_mpi, lmat_err, rmat_err, lrmat_err)
 
+! collect the powers of local magnetization data from szpow to szpow_mpi
+     call ctqmc_reduce_szpw(szpow_mpi, szpow_err)
+
 ! collect the spin-spin correlation function data from schi to schi_mpi
 ! collect the spin-spin correlation function data from sschi to sschi_mpi
 ! collect the spin-spin correlation function data from ssfom to ssfom_mpi
@@ -583,6 +605,7 @@
      lmat  = lmat_mpi  * real(nmonte) / real(nsweep)
      rmat  = rmat_mpi  * real(nmonte) / real(nsweep)
      lrmat = lrmat_mpi * real(nmonte) / real(nsweep)
+     szpow = szpow_mpi * real(nmonte) / real(nsweep)
      schi  = schi_mpi  * real(nmonte) / real(nsweep)
      sschi = sschi_mpi * real(nmonte) / real(nsweep)
      ssfom = ssfom_mpi * real(nmonte) / real(nsweep)
@@ -613,6 +636,7 @@
      lmat_err  = lmat_err  * real(nmonte) / real(nsweep)
      rmat_err  = rmat_err  * real(nmonte) / real(nsweep)
      lrmat_err = lrmat_err * real(nmonte) / real(nsweep)
+     szpow_err = szpow_err * real(nmonte) / real(nsweep)
      schi_err  = schi_err  * real(nmonte) / real(nsweep)
      sschi_err = sschi_err * real(nmonte) / real(nsweep)
      ssfom_err = ssfom_err * real(nmonte) / real(nsweep)
@@ -695,6 +719,11 @@
          call ctqmc_dump_lmat(lmat, rmat, lrmat, lmat_err, rmat_err, lrmat_err)
      endif ! back if ( myid == master ) block
 
+! write out the final powers of local magnetization data, szpow
+     if ( myid == master ) then ! only master node can do it
+         call ctqmc_dump_szpw(szpow, szpow_err)
+     endif ! back if ( myid == master ) block
+
 ! write out the final spin-spin correlation function data, schi, sschi, and ssfom
      if ( myid == master ) then ! only master node can do it
          call ctqmc_dump_schi(schi, sschi, schi_err, sschi_err)
@@ -775,6 +804,8 @@
      deallocate(rmat_err )
      deallocate(lrmat_mpi)
      deallocate(lrmat_err)
+     deallocate(szpow_mpi)
+     deallocate(szpow_err)
      deallocate(schi_mpi )
      deallocate(schi_err )
      deallocate(sschi_mpi)
@@ -1051,6 +1082,65 @@
 
      return
   end subroutine ctqmc_diagram_checking
+
+!!>>> ctqmc_diagram_plotting: write out a snapshot for the current diagram
+!!>>> configuration, the results can be used to make a dynamical video.
+  subroutine ctqmc_diagram_plotting(iter, cstep)
+     use constants, only : mystd, mytmp
+
+     use control, only : norbs
+     use control, only : niter
+     use control, only : nwrite, nsweep
+     use context, only : index_s, index_e, time_s, time_e
+     use context, only : rank
+
+     implicit none
+
+! external arguments
+! current self-consistent iteration number
+     integer, intent(in) :: iter
+
+! current QMC sweeping steps
+     integer, intent(in) :: cstep
+
+! local variables
+! loop index for the flavor
+     integer :: i
+
+! loop index for the operator pair
+     integer :: j
+
+! setup the internal criterion
+     if ( nsweep/nwrite < 100 ) RETURN
+
+! write the snapshot
+! open data file: solver.diag.dat
+     open(mytmp, file='solver.diag.dat', form='formatted', status='unknown', position='append')
+
+! write diagram info
+     write(mytmp,'(2(a,i4))') '>> cur_iter:', iter, ' tot_iter:', niter
+     write(mytmp,'(2(a,i4))') '>> cur_diag:', cstep/nwrite, ' tot_diag:', nsweep/nwrite
+
+! write the position of operators
+     do i=1,norbs
+         write(mytmp,'(2(a,i4))') '# flvr:', i, ' rank:', rank(i)
+         do j=1,rank(i)
+             write(mytmp,'(i4,2f16.8)') i, time_s( index_s(j, i), i ), time_e( index_e(j, i), i )
+         enddo ! over j={1,rank(i)} loop
+     enddo ! over i={1,norbs} loop
+
+! write two blank lines
+     write(mytmp,*)
+     write(mytmp,*)
+
+! close data file
+     close(mytmp)
+
+! write the message to the terminal
+     write(mystd,'(4X,a)') '>>> quantum impurity solver config: saving'
+
+     return
+  end subroutine ctqmc_diagram_plotting
 
 !!>>> ctqmc_impurity_tester: testing subroutine, please try to active it
 !!>>> on ctqmc_diagram_sampling() subroutine
