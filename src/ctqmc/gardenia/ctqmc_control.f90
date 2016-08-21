@@ -89,14 +89,12 @@
 ! if p == 5, calculate orbital-orbital correlation function (frequency space)
 ! if p == 6, calculate < k^2 > - < k >^2
 ! if p == 7, calculate fidelity susceptibility matrix
-! if p == 8, reserved
+! if p == 8, calculate < S^n_z >, powers of local magnetization
 ! if p == 9, reserved
 !
 ! example:
 !   ( 1 1 1 0 1 0 1 0 1)_2
 ! p = 9 8 7 6 5 4 3 2 1
-!
-! note: p = 4 and p = 5 are not implemented so far.
      integer, public, save :: issus  = 1
 
 ! control flag: whether we measure the high order correlation function
